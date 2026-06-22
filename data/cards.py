@@ -1,0 +1,7 @@
+class CardData:
+    APPROVED_CARD = '4444 4444 4444 4441'
+    DECLINED_CARD = '4444 4444 4444 4442'
+    VALID_MONTH = '12'
+    VALID_YEAR = '27'
+    VALID_OWNER = 'Ivan Ivanov'
+    VALID_CVC = '123'

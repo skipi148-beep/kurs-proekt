@@ -1,3 +1,4 @@
+cat << 'EOF' > tests/test_ui.py
 import allure
 import pytest
 from pages.trip_page import TripPage
@@ -6,8 +7,6 @@ from assertions.db_assertions import DbAssertions
 
 @allure.epic("Дипломный проект: Магазин Туров")
 class TestTripShop:
-
-    # --- ПОЗИТИВНЫЕ СЦЕНАРИИ ---
 
     @allure.feature("Покупка тура по дебетовой карте")
     @allure.story("Успешная оплата картой APPROVED")
@@ -24,8 +23,6 @@ class TestTripShop:
         page.select_buy_via_credit()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
         DbAssertions(db_engine).verify_last_status("credit_request_entity", "APPROVED")
-
-    # --- НЕГАТИВНЫЕ СЦЕНАРИИ ---
 
     @allure.feature("Покупка тура по дебетовой карте")
     @allure.story("Отказ в оплате картой DECLINED")
@@ -49,7 +46,6 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form("", "", "", "", "")
-        # Проверяем, что форма выдает ошибки валидации на UI
         assert page.is_validation_error_displayed(), "Ошибки валидации пустых полей не отобразились!"
 
     @allure.feature("Валидация формы")
@@ -107,3 +103,4 @@ class TestTripShop:
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, "12")
         assert page.is_validation_error_displayed(), "Ошибка короткого CVC кода не появилась!"
+EOF

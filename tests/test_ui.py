@@ -1,50 +1,109 @@
 import allure
 import pytest
-import time
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from sqlalchemy import text
+from pages.trip_page import TripPage
+from data.cards import CardData
+from assertions.db_assertions import DbAssertions
 
 @allure.epic("Дипломный проект: Магазин Туров")
-@allure.feature("Покупка тура по дебетовой карте")
-@allure.story("Успешная оплата картой APPROVED")
-def test_successful_payment_via_card(driver, db_engine):
-    # 1. Открываем сайт
-    with allure.step("Открыть главную страницу магазина"):
-        driver.get("http://localhost:8080")
+class TestTripShop:
 
-    # 2. Кликаем по кнопке покупки
-    with allure.step("Нажать кнопку 'Купить'"):
-        driver.find_element(By.XPATH, "//button[contains(., 'Купить')]").click()
+    # --- ПОЗИТИВНЫЕ СЦЕНАРИИ ---
 
-    # 3. Заполняем платежную форму валидными данными карты APPROVED
-    with allure.step("Заполнить платежную форму валидными данными"):
-        driver.find_element(By.XPATH, "//input[@placeholder='0000 0000 0000 0000']").send_keys("4444 4444 4444 4441")
-        driver.find_element(By.XPATH, "//input[@placeholder='08']").send_keys("12")
-        driver.find_element(By.XPATH, "//input[@placeholder='22']").send_keys("27")
-        driver.find_element(By.XPATH, "//span[text()='Владелец']/..//input").send_keys("Ivan Ivanov")
-        driver.find_element(By.XPATH, "//input[@placeholder='999']").send_keys("123")
-        driver.find_element(By.XPATH, "//button[contains(., 'Продолжить')]").click()
+    @allure.feature("Покупка тура по дебетовой карте")
+    @allure.story("Успешная оплата картой APPROVED")
+    def test_successful_debit_payment(self, driver, db_engine):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        DbAssertions(db_engine).verify_last_status("payment_entity", "APPROVED")
 
-    # 4. Ожидаем появление сообщения об успешной операции на UI
-    with allure.step("Проверить появление всплывающего окна об успехе"):
-        wait = WebDriverWait(driver, 15)
-        success_notification = wait.until(
-            EC.visibility_of_element_located((By.XPATH, "//div[contains(@class, 'notification_status_ok')]"))
-        )
-        assert success_notification.is_displayed(), "Уведомление об успешной операции не появилось!"
+    @allure.feature("Покупка тура в кредит")
+    @allure.story("Успешное оформление кредита картой APPROVED")
+    def test_successful_credit_payment(self, driver, db_engine):
+        page = TripPage(driver).open()
+        page.select_buy_via_credit()
+        page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        DbAssertions(db_engine).verify_last_status("credit_request_entity", "APPROVED")
 
-    # 5. Проверяем СУБД с умным циклом ожидания записи (Polling)
-    with allure.step("Сделать запрос к СУБД и дождаться сохранения статуса APPROVED"):
-        result = None
-        # Опрашиваем БД в течение 5 секунд (5 попыток по 1 секунде)
-        for _ in range(5):
-            with db_engine.connect() as conn:
-                result = conn.execute(text("SELECT status FROM payment_entity ORDER BY created DESC LIMIT 1;")).fetchone()
-                if result is not None:
-                    break  # Запись появилась, выходим из цикла
-            time.sleep(1)
-            
-        assert result is not None, "Запись о дебетовом платеже полностью отсутствует в БД!"
-        assert result[0] == "APPROVED", f"Ожидался статус APPROVED, но в базе сохранен: {result[0]}"
+    # --- НЕГАТИВНЫЕ СЦЕНАРИИ ---
+
+    @allure.feature("Покупка тура по дебетовой карте")
+    @allure.story("Отказ в оплате картой DECLINED")
+    def test_declined_debit_payment(self, driver, db_engine):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.DECLINED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        DbAssertions(db_engine).verify_last_status("payment_entity", "DECLINED")
+
+    @allure.feature("Покупка тура в кредит")
+    @allure.story("Отказ в кредите картой DECLINED")
+    def test_declined_credit_payment(self, driver, db_engine):
+        page = TripPage(driver).open()
+        page.select_buy_via_credit()
+        page.fill_form(CardData.DECLINED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        DbAssertions(db_engine).verify_last_status("credit_request_entity", "DECLINED")
+
+    @allure.feature("Валидация формы")
+    @allure.story("Отправка полностью пустой формы")
+    def test_empty_form_validation(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form("", "", "", "", "")
+        # Проверяем, что форма выдает ошибки валидации на UI
+        assert page.is_validation_error_displayed(), "Ошибки валидации пустых полей не отобразились!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Невалидный формат номера карты (15 цифр)")
+    def test_short_card_number(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form("4444 4444 4444 444", CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        assert page.is_validation_error_displayed(), "Ошибка короткого номера карты не появилась!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Невалидное значение месяца (00)")
+    def test_zero_month_validation(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, "00", CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        assert page.is_validation_error_displayed(), "Ошибка невалидного месяца (00) не появилась!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Невалидное значение месяца (13)")
+    def test_invalid_max_month(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, "13", CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        assert page.is_validation_error_displayed(), "Ошибка невалидного месяца (13) не появилась!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Истекший срок действия карты (Прошедший год)")
+    def test_past_year_validation(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, "23", CardData.VALID_OWNER, CardData.VALID_CVC)
+        assert page.is_validation_error_displayed(), "Ошибка истекшего года карты не появилась!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Избыточный срок действия карты (Далекое будущее)")
+    def test_future_year_validation(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, "35", CardData.VALID_OWNER, CardData.VALID_CVC)
+        assert page.is_validation_error_displayed(), "Ошибка года из далекого будущего не появилась!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Невалидные данные в поле Владелец (Кириллица)")
+    def test_cyrillic_owner_name(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, "Иван Иванов", CardData.VALID_CVC)
+        assert page.is_validation_error_displayed(), "Ошибка кириллицы в имени владельца не появилась!"
+
+    @allure.feature("Валидация формы")
+    @allure.story("Невалидный формат CVC/CVV кода (2 цифры)")
+    def test_short_cvc_validation(self, driver):
+        page = TripPage(driver).open()
+        page.select_buy_via_card()
+        page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, "12")
+        assert page.is_validation_error_displayed(), "Ошибка короткого CVC кода не появилась!"

@@ -1,3 +1,4 @@
+cat << 'EOF' > pages/trip_page.py
 import allure
 from selenium.webdriver.common.by import By
 
@@ -12,7 +13,6 @@ class TripPage:
         self.owner_input = (By.XPATH, "//span[text()='Владелец']/..//input")
         self.cvc_input = (By.XPATH, "//input[@placeholder='999']")
         self.submit_button = (By.XPATH, "//button[contains(., 'Продолжить')]")
-        # Локатор для поиска ошибок валидации под полями (красный текст)
         self.input_sub_error = (By.XPATH, "//span[contains(@class, 'input__sub')]")
 
     @allure.step('Открыть страницу покупки тура')
@@ -43,3 +43,4 @@ class TripPage:
             return self.driver.find_element(*self.input_sub_error).is_displayed()
         except:
             return False
+EOF

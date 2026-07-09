@@ -1,4 +1,3 @@
-cat << 'EOF' > tests/test_ui.py
 import allure
 import pytest
 from pages.trip_page import TripPage
@@ -8,12 +7,17 @@ from assertions.db_assertions import DbAssertions
 @allure.epic("Дипломный проект: Магазин Туров")
 class TestTripShop:
 
+    # --- ПОЗИТИВНЫЕ СЦЕНАРИИ ---
+
     @allure.feature("Покупка тура по дебетовой карте")
     @allure.story("Успешная оплата картой APPROVED")
     def test_successful_debit_payment(self, driver, db_engine):
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        # Проверяем UI уведомление
+        page.wait_success_notification()
+        # Проверяем запись в СУБД
         DbAssertions(db_engine).verify_last_status("payment_entity", "APPROVED")
 
     @allure.feature("Покупка тура в кредит")
@@ -22,7 +26,10 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_credit()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        page.wait_success_notification()
         DbAssertions(db_engine).verify_last_status("credit_request_entity", "APPROVED")
+
+    # --- НЕГАТИВНЫЕ СЦЕНАРИИ ---
 
     @allure.feature("Покупка тура по дебетовой карте")
     @allure.story("Отказ в оплате картой DECLINED")
@@ -30,6 +37,9 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.DECLINED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        # Ожидаем тост об ошибке/отказе на UI
+        page.wait_error_notification()
+        # Ожидаем DECLINED статус в базе
         DbAssertions(db_engine).verify_last_status("payment_entity", "DECLINED")
 
     @allure.feature("Покупка тура в кредит")
@@ -38,6 +48,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_credit()
         page.fill_form(CardData.DECLINED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
+        page.wait_error_notification()
         DbAssertions(db_engine).verify_last_status("credit_request_entity", "DECLINED")
 
     @allure.feature("Валидация формы")
@@ -46,7 +57,8 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form("", "", "", "", "")
-        assert page.is_validation_error_displayed(), "Ошибки валидации пустых полей не отобразились!"
+        # Исправлено: жесткая проверка на наличие ошибок под всеми 5 полями
+        assert page.are_all_fields_invalid(), "Ошибки валидации отобразились не под всеми 5 полями формы!"
 
     @allure.feature("Валидация формы")
     @allure.story("Невалидный формат номера карты (15 цифр)")
@@ -54,7 +66,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form("4444 4444 4444 444", CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
-        assert page.is_validation_error_displayed(), "Ошибка короткого номера карты не появилась!"
+        assert page.is_any_validation_error_displayed(), "Ошибка короткого номера карты не появилась!"
 
     @allure.feature("Валидация формы")
     @allure.story("Невалидное значение месяца (00)")
@@ -62,7 +74,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, "00", CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
-        assert page.is_validation_error_displayed(), "Ошибка невалидного месяца (00) не появилась!"
+        assert page.is_any_validation_error_displayed(), "Ошибка невалидного месяца (00) не появилась!"
 
     @allure.feature("Валидация формы")
     @allure.story("Невалидное значение месяца (13)")
@@ -70,7 +82,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, "13", CardData.VALID_YEAR, CardData.VALID_OWNER, CardData.VALID_CVC)
-        assert page.is_validation_error_displayed(), "Ошибка невалидного месяца (13) не появилась!"
+        assert page.is_any_validation_error_displayed(), "Ошибка невалидного месяца (13) не появилась!"
 
     @allure.feature("Валидация формы")
     @allure.story("Истекший срок действия карты (Прошедший год)")
@@ -78,7 +90,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, "23", CardData.VALID_OWNER, CardData.VALID_CVC)
-        assert page.is_validation_error_displayed(), "Ошибка истекшего года карты не появилась!"
+        assert page.is_any_validation_error_displayed(), "Ошибка истекшего года карты не появилась!"
 
     @allure.feature("Валидация формы")
     @allure.story("Избыточный срок действия карты (Далекое будущее)")
@@ -86,7 +98,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, "35", CardData.VALID_OWNER, CardData.VALID_CVC)
-        assert page.is_validation_error_displayed(), "Ошибка года из далекого будущего не появилась!"
+        assert page.is_any_validation_error_displayed(), "Ошибка года из далекого будущего не появилась!"
 
     @allure.feature("Валидация формы")
     @allure.story("Невалидные данные в поле Владелец (Кириллица)")
@@ -94,7 +106,7 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, "Иван Иванов", CardData.VALID_CVC)
-        assert page.is_validation_error_displayed(), "Ошибка кириллицы в имени владельца не появилась!"
+        assert page.is_any_validation_error_displayed(), "Ошибка кириллицы в имени владельца не появилась!"
 
     @allure.feature("Валидация формы")
     @allure.story("Невалидный формат CVC/CVV кода (2 цифры)")
@@ -102,5 +114,4 @@ class TestTripShop:
         page = TripPage(driver).open()
         page.select_buy_via_card()
         page.fill_form(CardData.APPROVED_CARD, CardData.VALID_MONTH, CardData.VALID_YEAR, CardData.VALID_OWNER, "12")
-        assert page.is_validation_error_displayed(), "Ошибка короткого CVC кода не появилась!"
-EOF
+        assert page.is_any_validation_error_displayed(), "Ошибка короткого CVC кода не появилась!"

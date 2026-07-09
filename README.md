@@ -1,21 +1,28 @@
 # Инструкция по запуску проекта AQA Shop
 
 ## 1. Запуск инфраструктуры
-Запуск базы данных PostgreSQL, эмулятора банковских шлюзов и Java-приложения осуществляется через Docker Compose:
+Запуск базы данных PostgreSQL, эмулятора банковских шлюзов и Java-приложения осуществляется через Docker Compose одной командой:
 ```bash
 docker compose up -d
 ```
 Приложение будет доступно по адресу: http://localhost:8080
 
 ## 2. Запуск автотестов
-1. Активируйте виртуальное окружение Python:
-```bash
-source venv/Scripts/activate
-```
+
+1. Активируйте виртуальное окружение в зависимости от вашей ОС:
+   * **Для Windows (Git Bash / PowerShell):**
+     ```bash
+     venv/Scripts/activate
+     ```
+   * **Для Linux / macOS:**
+     ```bash
+     source venv/bin/activate
+     ```
+
 2. Запустите тесты с записью результатов для Allure-отчета:
-```bash
-pytest --alluredir=allure-results
-```
+   ```bash
+   pytest --alluredir=allure-results
+   ```
 
 ## 3. Генерация отчетов Allure
 Для сборки интерактивного HTML-отчета и его автоматического открытия в браузере выполните:

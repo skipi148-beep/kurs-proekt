@@ -1,6 +1,7 @@
-cat << 'EOF' > pages/trip_page.py
 import allure
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 class TripPage:
     def __init__(self, driver):
@@ -37,10 +38,27 @@ class TripPage:
         self.driver.find_element(*self.cvc_input).send_keys(cvc)
         self.driver.find_element(*self.submit_button).click()
 
-    @allure.step('Проверить отображение ошибки валидации под полями')
-    def is_validation_error_displayed(self):
+    @allure.step('Дождаться всплывающего окна об успехе операции')
+    def wait_success_notification(self):
+        WebDriverWait(self.driver, 15).until(
+            EC.visibility_of_element_located((By.XPATH, "//div[contains(@class, 'notification_status_ok')]"))
+        )
+
+    @allure.step('Дождаться всплывающего окна об ошибке/отказе')
+    def wait_error_notification(self):
+        WebDriverWait(self.driver, 15).until(
+            EC.visibility_of_element_located((By.XPATH, "//div[contains(@class, 'notification_status_error')]"))
+        )
+
+    @allure.step('Проверить, что под всеми 5 полями появились сообщения об ошибке валидации')
+    def are_all_fields_invalid(self):
+        error_elements = self.driver.find_elements(*self.input_sub_error)
+        visible_errors = [el for el in error_elements if el.is_displayed()]
+        return len(visible_errors) == 5
+
+    @allure.step('Проверить, что появилась хотя бы одна ошибка валидации под полем')
+    def is_any_validation_error_displayed(self):
         try:
             return self.driver.find_element(*self.input_sub_error).is_displayed()
         except:
             return False
-EOF
